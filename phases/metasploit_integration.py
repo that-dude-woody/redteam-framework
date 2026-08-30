@@ -137,30 +137,29 @@ exit -y
             return {"success": False, "error": str(e)}
 
     def build_task_list(self) -> list[dict]:
-        """Build Metasploit tasks from discovered services (engine convention)."""
-        return type(self).build_tasks(self.kb)
+        """Build Metasploit tasks from the engine-provided snapshot.
+
+        ``prior_findings`` is already scoped by the Engine (current run +
+        operator scope), so stale targets from previous campaigns can never
+        generate tasks here.
+        """
+        return type(self).build_tasks_from_findings(self.prior_findings)
 
     @staticmethod
-    def build_tasks(kb) -> list[dict]:
-        """Build a list of Metasploit exploitation tasks based on KB state."""
-        targets = kb.get_discovered_targets()
-        if not targets:
-            log.warning("No exploitable targets found to generate Metasploit tasks.")
-            return []
+    def build_tasks_from_findings(findings) -> list[dict]:
+        """Build a list of Metasploit exploitation tasks from scoped findings."""
+        # Group service findings by target -> {service_name: port}
+        svc_by_target: dict[str, dict[str, int]] = {}
+        for f in findings:
+            if f.category != "service":
+                continue
+            svc = (f.metadata.get("service_name") or "").strip().lower()
+            port = f.metadata.get("port") or 0
+            if svc and svc not in svc_by_target.setdefault(f.target, {}):
+                svc_by_target[f.target][svc] = port
 
         tasks = []
-        for ip in targets:
-            # Collect service names and the first observed port per service
-            svc_ports: dict[str, int] = {}
-            for f in kb.get_findings(target=ip, category="service"):
-                svc = (f.metadata.get("service_name") or "").strip().lower()
-                port = f.metadata.get("port")
-                if svc and svc not in svc_ports:
-                    svc_ports[svc] = port or 0
-
-            if not svc_ports:
-                continue
-
+        for ip, svc_ports in svc_by_target.items():
             for svc, port in sorted(svc_ports.items()):
                 if svc in MSF_MODULE_MAP:
                     for module in MSF_MODULE_MAP[svc]:
@@ -168,4 +167,12 @@ exit -y
                 elif svc in ("http", "https"):
                     # No dedicated mapping — run the generic version scanner
                     tasks.append({"target": ip, "module": "auxiliary/scanner/http/http_version", "port": port or 80})
+
+        if not tasks:
+            log.warning("No exploitable services found to generate Metasploit tasks.")
         return tasks
+
+    @staticmethod
+    def build_tasks(kb) -> list[dict]:
+        """Backwards-compatible helper: synthesize tasks from a KB's findings."""
+        return metasploit_integration.build_tasks_from_findings(kb.get_all_findings())

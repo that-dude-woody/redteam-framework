@@ -182,3 +182,24 @@ class TestMetasploitBuildTasks:
                                metadata={"service_name": "ssh", "port": 22}))
         tasks = metasploit_integration.build_tasks(kb)
         assert any(t["target"] == "10.0.0.5" and t["port"] == 22 for t in tasks)
+
+    def test_build_task_list_uses_scoped_snapshot_only(self):
+        """Stale targets left in the live KB must not generate tasks when the
+        engine-provided (scoped) snapshot doesn't include them."""
+        from unittest.mock import MagicMock
+        from phases.metasploit_integration import metasploit_integration
+
+        kb = KnowledgeBase(":memory:")
+        # Stale rows from a previous campaign still sitting in the DB:
+        kb.add_finding(Finding(phase="discovery", target="73.170.57.26", category="service",
+                               severity="info", title="ssh", description="d",
+                               metadata={"service_name": "ssh", "port": 22}))
+        # Engine-scoped snapshot for THIS run only contains an in-scope service:
+        scoped = [Finding(phase="discovery", target="api.example.com", category="service",
+                          severity="info", title="ssh", description="d",
+                          metadata={"service_name": "ssh", "port": 22})]
+        handler = metasploit_integration(FrameworkConfig(), kb, MagicMock(), scoped, [])
+        tasks = handler.build_task_list()
+        targets = {t["target"] for t in tasks}
+        assert "api.example.com" in targets
+        assert "73.170.57.26" not in targets

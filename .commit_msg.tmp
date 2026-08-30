@@ -1,0 +1,16 @@
+Enable every phase by default (altdns + metasploit_integration no longer disabled)
+
+All 13 phases in get_phase_order() now default to enabled in both the
+FrameworkConfig defaults and config.json. Optional-tool phases self-skip
+gracefully at task-build time when their binaries are absent.
+
+Also made metasploit_integration scope-safe before enabling it: build_task_list()
+now derives tasks from the engine-provided filtered snapshot (prior_findings)
+instead of querying get_discovered_targets()/get_findings() on the live KB,
+so stale targets from previous campaigns cannot resurface now that it runs
+by default. Added build_tasks_from_findings() as the core synthesis helper.
+
+- core/config.py: altdns, metasploit_integration -> enabled=True
+- config.json: same
+- phases/metasploit_integration.py: scoped snapshot + regression test
+- tests/test_regressions.py: +1 test (scoped metasploit task list)

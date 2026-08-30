@@ -22,7 +22,7 @@
       "options": {}
     },
     "altdns": {
-      "enabled": false,
+      "enabled": true,
       "timeout": 1800,
       "max_threads": 4,
       "options": {}
@@ -52,7 +52,7 @@
       "options": {}
     },
     "metasploit_integration": {
-      "enabled": false,
+      "enabled": true,
       "timeout": 3600,
       "max_threads": 4,
       "options": {}
