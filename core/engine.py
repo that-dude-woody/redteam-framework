@@ -16,6 +16,7 @@ from typing import Callable, Optional
 from core.config import FrameworkConfig, get_phase_order
 from core.credential_store import CredentialStore
 from core.knowledge_base import KnowledgeBase
+from core.scope import get_run_scope, target_in_scope
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,12 @@ class Engine:
         self.config = config
         self.kb = KnowledgeBase(config.db_path)
         self._throttle = throttle
+        # Strict run scoping: phases only ever see (a) rows created during this
+        # engine run and (b) rows whose target falls inside the operator scope.
+        # The shared persistent KB is campaign-agnostic, so historical rows from
+        # previous campaigns must be filtered out or we'd scan stale targets.
+        self._scope = get_run_scope(config)
+        self._run_start: Optional[datetime] = datetime.now(timezone.utc)
         # Wire up credential store so phases never need hardcoded passwords
         self.cred_store = CredentialStore(
             db_path=config.db_path,
@@ -87,6 +94,31 @@ class Engine:
         self._run_phase(phase_name)
 
     # ------------------------------------------------------------------ #
+    # Run-scope helpers
+    # ------------------------------------------------------------------ #
+
+    def _is_current_run(self, timestamp: str) -> bool:
+        """True for rows written after this Engine instance was created."""
+        try:
+            return timestamp >= self._run_start.isoformat()
+        except TypeError:
+            return False
+
+    def _in_scope(self, target: str) -> bool:
+        """True when a target falls within the operator-supplied scope."""
+        return target_in_scope(target, self._scope)
+
+    def _filter_findings(self, findings) -> list:
+        """Keep only in-scope findings or findings produced during this run."""
+        return [f for f in findings
+                if self._is_current_run(f.timestamp) or self._in_scope(f.target)]
+
+    def _filter_logs(self, logs) -> list:
+        """Keep only in-scope exploit logs or logs produced during this run."""
+        return [l for l in logs
+                if self._is_current_run(l.timestamp) or self._in_scope(l.target)]
+
+    # ------------------------------------------------------------------ #
     # Phase lifecycle
     # ------------------------------------------------------------------ #
 
@@ -112,9 +144,10 @@ class Engine:
             max_workers = phase_cfg.max_threads if phase_cfg else 4
             timeout = phase_cfg.timeout if phase_cfg else 3600
 
-            # 1. Ingest the full accumulated KB state
-            all_findings = self.kb.get_all_findings()
-            all_logs = self.kb.get_exploit_logs()
+            # 1. Ingest the full accumulated KB state, filtered to the current
+            #    run + operator scope (never rows from prior campaigns).
+            all_findings = self._filter_findings(self.kb.get_all_findings())
+            all_logs = self._filter_logs(self.kb.get_exploit_logs())
 
             log.info(
                 ">>> Phase [%s] starting — KB has %d findings, %d exploit logs",

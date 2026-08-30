@@ -367,7 +367,11 @@ class KnowledgeBase:
             l_count = conn.execute("SELECT COUNT(*) FROM exploit_logs").fetchone()[0]
             conn.execute("DELETE FROM findings")
             conn.execute("DELETE FROM exploit_logs")
-            conn.execute("DELETE FROM metadata WHERE key LIKE 'phase_done:%'")
+            # Purge stale per-target metadata and completion stamps so a reset
+            # actually starts a fresh campaign.
+            conn.execute(
+                "DELETE FROM metadata WHERE key LIKE 'phase_done:%' OR key LIKE 'target:%'"
+            )
             conn.commit()
         return f_count, l_count
 

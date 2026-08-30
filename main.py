@@ -124,18 +124,21 @@ def main():
             if not engine._is_enabled(phase_name):
                 continue
             HandlerClass = engine._load_phase_module(phase_name)
+            prior_findings = engine._filter_findings(engine.kb.get_all_findings())
+            prior_logs = engine._filter_logs(engine.kb.get_exploit_logs())
             handler = HandlerClass(
                 config=engine.config, kb=engine.kb,
                 cred_store=engine.cred_store,
-                prior_findings=engine.kb.get_all_findings(),
-                prior_exploit_logs=engine.kb.get_exploit_logs(),
+                prior_findings=prior_findings,
+                prior_exploit_logs=prior_logs,
             )
             tasks = handler.build_task_list()
             all_tasks.extend((phase_name, t) for t in tasks)
 
         print(f"\n--- Dry Run ({len(all_tasks)} tasks would execute) ---")
         for phase_name, task in all_tasks:
-            print(f"  [{phase_name}] {task.get('action')} → {task.get('target', 'N/A')}")
+            action = task.get("action") or task.get("type", "?")
+            print(f"  [{phase_name}] {action} → {task.get('target', 'N/A')}")
         print("Done. Use without --dry-run to execute.")
         return
 

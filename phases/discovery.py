@@ -157,14 +157,17 @@ class discovery:
     def _run_httpx(self, task: dict):
         """Fingerprint discovered HTTP(S) endpoints once, deduped against known web_app findings."""
         if not self.te.resolve_binary("httpx"): return
-        candidates = set(task.get("targets") or [])
-        # Live merge: pick up hosts scanned earlier in this phase
+        # Live-merge must stay inside the run scope: only hosts this run is
+        # allowed to touch (configured targets + hosts the port scanners chose).
+        from core.scope import normalize_host, target_in_scope
+        scope_hosts = {normalize_host(t) for t in getattr(self.config.target, "targets", []) if normalize_host(t)}
+        candidates = {h for h in (task.get("targets") or []) if target_in_scope(h, self.config.target.targets)}
+        # Pick up port findings written earlier in this phase — all of them
+        # originated from target hosts the port scanners were already scoped to.
         for f in self.kb.get_all_findings():
             if f.category == "open_port" and f.metadata.get("port") in (80, 443, 8080, 8443):
-                candidates.add(f.target)
-        for t in getattr(self.config.target, "targets", []):
-            host = urlparse(t).hostname or t.strip("/")
-            if host: candidates.add(host.lower().strip("."))
+                if normalize_host(f.target) in scope_hosts or target_in_scope(f.target, self.config.target.targets):
+                    candidates.add(f.target)
         if not candidates: return
 
         host_file = "/tmp/httpx_hosts.txt"

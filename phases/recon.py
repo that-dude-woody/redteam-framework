@@ -26,9 +26,20 @@ class recon:
         self.prior_exploit_logs = prior_exploit_logs
 
     def build_task_list(self) -> List[Dict[str, Any]]:
-        targets = self.kb.get_discovered_targets() or []
+        # Strict scope: recon scans ONLY the operator-supplied targets. The
+        # shared KB holds data from previous campaigns, so get_discovered_targets()
+        # must not be used to source a run's recon surface.
+        from core.scope import normalize_host
+        targets = []
+        seen = set()
+        for raw in getattr(self.config.target, "targets", []) or []:
+            host = normalize_host(raw)
+            if host and host not in seen:
+                seen.add(host)
+                targets.append(host)
+
         if not targets:
-            log.warning("No targets found in KB to run recon.")
+            log.warning("No configured targets to run recon on.")
             return []
 
         tasks = []

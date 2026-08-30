@@ -72,8 +72,19 @@ class TestHttpx:
         te = MagicMock()
         te.resolve_binary = MagicMock(return_value="/opt/homebrew/bin/httpx")
         te.run = MagicMock(return_value=res)
-        handler = make_handler(te=te)
+        handler = make_handler(te=te, targets=["a.com"])
         handler.execute_task({"action": "httpx_fingerprint", "targets": ["a.com"]})
         web = handler.kb.get_findings(category="web_app")
         assert len(web) == 1
         assert web[0].title == "Web app http://a.com (HTTP 200)"
+
+    def test_run_httpx_ignores_target_outside_scope(self):
+        te = MagicMock()
+        te.resolve_binary = MagicMock(return_value="/opt/homebrew/bin/httpx")
+        te.run = MagicMock(return_value=ToolResult(success=True, parsed=[
+            {"url": "http://unscoped.com", "status_code": 200, "tech": []},
+        ]))
+        # Scope says a.com; an unsolicited httpx probe of unscoped.com must be dropped
+        handler = make_handler(te=te, targets=["a.com"])
+        handler.execute_task({"action": "httpx_fingerprint", "targets": ["unscoped.com"]})
+        assert handler.kb.get_findings(category="web_app") == []
