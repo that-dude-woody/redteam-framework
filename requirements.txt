@@ -1,0 +1,2 @@
+# Python >= 3.12 required (dataclass kw-only fields, match statements, etc.)
+# No third-party dependencies — entire framework uses only the standard library.

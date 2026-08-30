@@ -1,0 +1,96 @@
+{
+  "operator_name": "operator",
+  "campaign_id": "CAMPAIGN-001",
+  "target": {
+    "targets": [],
+    "target_os": "mixed",
+    "authorized": true,
+    "logging_enabled": true,
+    "scope_file": null
+  },
+  "phases": {
+    "recon": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "discovery": {
+      "enabled": true,
+      "timeout": 3600,
+      "max_threads": 4,
+      "options": {}
+    },
+    "altdns": {
+      "enabled": false,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "ffuf": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "gobuster_vhost": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "wpscan": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "exploitation": {
+      "enabled": true,
+      "timeout": 7200,
+      "max_threads": 4,
+      "options": {}
+    },
+    "metasploit_integration": {
+      "enabled": false,
+      "timeout": 3600,
+      "max_threads": 4,
+      "options": {}
+    },
+    "searchsploit_enrichment": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    },
+    "exploit_logging": {
+      "enabled": true,
+      "timeout": 3600,
+      "max_threads": 4,
+      "options": {}
+    },
+    "post_exploit": {
+      "enabled": true,
+      "timeout": 3600,
+      "max_threads": 4,
+      "options": {}
+    },
+    "lateral_movement": {
+      "enabled": true,
+      "timeout": 3600,
+      "max_threads": 4,
+      "options": {}
+    },
+    "exfiltration": {
+      "enabled": true,
+      "timeout": 1800,
+      "max_threads": 4,
+      "options": {}
+    }
+  },
+  "report_format": [
+    "json",
+    "markdown"
+  ],
+  "db_path": "target_db/knowledge_base.db"
+}

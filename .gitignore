@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+red_env/
+.test_venv/
+.venv/
+venv/
+
+# Test / cache artifacts
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Runtime data (SQLite databases, downloaded knowledge bases)
+data/
+target_db/
+*.db
+*.db-shm
+*.db-wal
+
+# Generated reports and exploit staging
+reports/
+exploit_staging/
+
+# Tool output staging in /tmp is outside the repo, nothing to ignore here.
+
+# Editor / tool config
+.claude/
