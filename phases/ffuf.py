@@ -25,7 +25,7 @@ class ffuf:
     def build_task_list(self) -> list[dict]:
         tasks = []
         if not _resolve_binary("ffuf"):
-            log.warning("ffuf not found — skipping ffuf phase")
+            log.info("ffuf not found — skipping ffuf phase")
             return tasks
 
         known_hosts: set[str] = set()

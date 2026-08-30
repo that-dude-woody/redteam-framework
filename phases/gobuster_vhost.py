@@ -27,7 +27,7 @@ class gobuster_vhost:
     def build_task_list(self) -> list[dict]:
         tasks = []
         if not _resolve_binary("gobuster"):
-            log.warning("Gobuster not found — skipping vhost/fuzz phase")
+            log.info("Gobuster not found — skipping vhost/fuzz phase")
             return tasks
 
         # Collect unique hostnames from recon + discovery findings

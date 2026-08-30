@@ -25,7 +25,7 @@ class wpscan:
     def build_task_list(self) -> list[dict]:
         tasks = []
         if not _resolve_binary("wpscan"):
-            log.warning("WPScan not found — skipping WordPress phase")
+            log.info("WPScan not found — skipping WordPress phase")
             return tasks
 
         known_urls: set[str] = set()

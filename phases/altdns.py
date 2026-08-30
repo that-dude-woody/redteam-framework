@@ -28,7 +28,7 @@ class altdns:
     def build_task_list(self) -> list[dict]:
         tasks = []
         if not (_resolve_binary("altdns") or _resolve_binary("dnsgen")):
-            log.warning("Neither altdns nor dnsgen found — skipping domain mutation phase")
+            log.info("Neither altdns nor dnsgen found — skipping domain mutation phase")
             return tasks
 
         # Gather base domains from recon findings

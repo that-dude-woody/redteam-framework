@@ -57,7 +57,7 @@ class searchsploit_enrichment:
         try:
             check = subprocess.run(["which", "searchsploit"], capture_output=True)
             if check.returncode != 0:
-                log.warning("searchsploit not found — exploit enrichment skipped.")
+                log.info("searchsploit not found — exploit enrichment skipped.")
                 return None
 
             output = subprocess.run(
