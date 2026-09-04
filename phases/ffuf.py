@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from core.config import FrameworkConfig
 from core.credential_store import CredentialStore
 from core.knowledge_base import KnowledgeBase, Finding
+from core.wordlists import resolve
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class ffuf:
 
     def _run_dir_fuzz(self, task: dict):
         url = task["url"]
-        wordlist = _resolve_wordlist()
+        wordlist = resolve("web")
 
         cmd = [
             "ffuf", "-u", f"{url}/FUZZ",
@@ -65,7 +66,7 @@ class ffuf:
         ]
 
         res = self._run(cmd)
-        if not res.success:
+        if res.returncode != 0:
             return
 
         for line in res.stdout.strip().splitlines():
@@ -112,14 +113,3 @@ def _resolve_binary(name: str) -> bool:
         return result.returncode == 0
     except Exception:
         return False
-
-
-def _resolve_wordlist() -> str:
-    for path in [
-        "/usr/share/seclists/Discovery/Web-Content/common.txt",
-        "/usr/share/wordlists/dirb/big.txt",
-    ]:
-        import os  # noqa: E402
-        if os.path.isfile(path):
-            return path
-    return "/usr/share/seclists/Discovery/Web-Content/common.txt"

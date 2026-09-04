@@ -61,7 +61,7 @@ class altdns:
         if _resolve_binary("altdns"):
             cmd_altdns = ["altdns", "-d", domain, "-r"]
             res_alt = self._run(cmd_altdns)
-            if not res_alt.success or not res_alt.stdout.strip():
+            if res_alt.returncode != 0 or not res_alt.stdout.strip():
                 log.info("altdns returned nothing for %s", domain)
                 return
 
@@ -82,7 +82,7 @@ class altdns:
                     "massdns", "-r", "/usr/share/dns/resolvers.txt",
                     "-t", "A", "-o", "S", tmpfile, "/tmp/altdns_output.txt",
                 ])
-                if res_dns.success:
+                if res_dns.returncode == 0:
                     try:
                         import os as _os  # noqa: E402
                         if _os.path.isfile("/tmp/altdns_output.txt"):

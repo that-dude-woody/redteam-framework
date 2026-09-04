@@ -53,7 +53,7 @@ class wpscan:
         url = task["url"]
         cmd = ["wpscan", "--url", url, "--random-user-agent", "--ignore-main-404", "-f"]
         res = self._run(cmd)
-        if not res.success or "WordPress" not in res.stdout:
+        if res.returncode != 0 or "WordPress" not in res.stdout:
             return
 
         version = self._extract_field(res.stdout, "Version:")

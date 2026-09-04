@@ -60,6 +60,7 @@ class CredentialStore:
                 source TEXT DEFAULT 'config',
                 notes TEXT,
                 timestamp TEXT,
+                access_level TEXT DEFAULT 'unknown',
                 UNIQUE(username, password, target)
             )""")
         conn.commit()
@@ -138,8 +139,8 @@ class CredentialStore:
                 q += " AND verified = 1"
             return [dict(row) for row in conn.execute(q, params).fetchall()]
 
-    def mark_verified(self, target, username, password):
+    def mark_verified(self, target, username, password, access_level="unknown"):
         with self._get_conn() as conn:
-            conn.execute("UPDATE credentials SET verified=1 WHERE target=? AND username=? AND password=?",
-                         (target, username, password))
+            conn.execute("UPDATE credentials SET verified=1, access_level=? WHERE target=? AND username=? AND password=?",
+                         (access_level, target, username, password))
         conn.commit()

@@ -15,6 +15,7 @@ from core.credential_store import CredentialStore
 from core.config import FrameworkConfig
 from core.knowledge_base import KnowledgeBase, Finding, ExploitLog
 from core.tool_executor import ToolResult
+from unittest.mock import MagicMock
 
 
 # --------------------------------------------------------------------------- #
@@ -203,3 +204,120 @@ class TestMetasploitBuildTasks:
         targets = {t["target"] for t in tasks}
         assert "api.example.com" in targets
         assert "73.170.57.26" not in targets
+
+
+# --------------------------------------------------------------------------- #
+# ffuf / gobuster_vhost / wpscan / altdns: their local `_run()`/`_exec_gobuster()`
+# helpers return a raw subprocess.CompletedProcess, which exposes `.returncode`
+# but NOT `.success`. The phases probed `res.success`, raising
+#     AttributeError: 'CompletedProcess' object has no attribute 'success'
+# for every task — so the engine logged each task as failed and the phases
+# produced zero findings. Success must be checked via `.returncode == 0`.
+# --------------------------------------------------------------------------- #
+
+class TestLocalSubprocessRunReturncode:
+    def _completed(self, rc=0, stdout="", stderr=""):
+        import subprocess
+        return subprocess.CompletedProcess(
+            args=[], returncode=rc, stdout=stdout, stderr=stderr
+        )
+
+    def test_ffuf_success_path_produces_finding(self):
+        from phases.ffuf import ffuf
+        kb = KnowledgeBase(":memory:")
+        h = ffuf(FrameworkConfig(), kb, MagicMock(), [], [])
+        out = "[200]    123   4567  12345.6  http://know.shit.vc/admin\n"
+        ffuf._run = staticmethod(lambda cmd, timeout=300: self._completed(0, out))
+        # Before the fix this raised AttributeError; the success path now runs.
+        h.execute_task({"action": "dir_fuzz", "url": "http://know.shit.vc"})
+        assert any("admin" in f.title for f in kb.get_findings())
+
+    def test_ffuf_binary_missing_returns_early(self):
+        from phases.ffuf import ffuf
+        kb = KnowledgeBase(":memory:")
+        h = ffuf(FrameworkConfig(), kb, MagicMock(), [], [])
+        ffuf._run = staticmethod(
+            lambda cmd, timeout=300: self._completed(127, "", "binary not found"))
+        h.execute_task({"action": "dir_fuzz", "url": "http://know.shit.vc"})
+        assert kb.get_findings() == []
+
+    def test_gobuster_vhost_both_modules_run_without_crash(self):
+        from phases.gobuster_vhost import gobuster_vhost
+        kb = KnowledgeBase(":memory:")
+        h = gobuster_vhost(FrameworkConfig(), kb, MagicMock(), [], [])
+        gobuster_vhost._run = staticmethod(
+            lambda cmd, timeout=300:
+            self._completed(0, "2026/08/18 10:00:00 [!] host Status: 200\n")
+        )
+        # Previously crashed at both `.success` sites (vhost + dir-fuzz).
+        h.execute_task({"action": "vhost_discovery", "target": "know.shit.vc"})
+        h.execute_task({"action": "dir_fuzz", "target": "know.shit.vc"})
+
+    def test_gobuster_vhost_binary_missing_returns_early(self):
+        from phases.gobuster_vhost import gobuster_vhost
+        kb = KnowledgeBase(":memory:")
+        h = gobuster_vhost(FrameworkConfig(), kb, MagicMock(), [], [])
+        gobuster_vhost._run = staticmethod(
+            lambda cmd, timeout=300: self._completed(127, "", "nope"))
+        h.execute_task({"action": "vhost_discovery", "target": "know.shit.vc"})
+        h.execute_task({"action": "dir_fuzz", "target": "know.shit.vc"})
+        assert kb.get_findings() == []
+
+    def test_wpscan_success_path_produces_finding(self):
+        from phases.wpscan import wpscan
+        kb = KnowledgeBase(":memory:")
+        h = wpscan(FrameworkConfig(), kb, MagicMock(), [], [])
+        out = "WPScan v3.8.21\nWordPress 6.0 detected at http://know.shit.vc\n"
+        wpscan._run = staticmethod(lambda cmd, timeout=300: self._completed(0, out))
+        h.execute_task({"action": "detect_wpsite", "url": "http://know.shit.vc"})
+        assert any(f.category == "cms_detected" for f in kb.get_findings())
+
+    def test_altdns_mutate_exercises_returncode_paths(self):
+        import phases.altdns as altdns_mod
+        from phases.altdns import altdns
+        kb = KnowledgeBase(":memory:")
+        h = altdns(FrameworkConfig(), kb, MagicMock(), [], [])
+        orig = altdns_mod._resolve_binary
+        altdns_mod._resolve_binary = lambda name: True
+        altdns._run = staticmethod(
+            lambda cmd, timeout=120: self._completed(0, "know.shit.vc\n"))
+        try:
+            # Drives both previously-buggy `.success` sites (altdns + massdns).
+            h.execute_task({"action": "mutate", "domain": "know.shit.vc"})
+        finally:
+            altdns_mod._resolve_binary = orig
+
+
+# --------------------------------------------------------------------------- #
+# Wordlist resolution: the fuzz phases used to hardcode Linux-only SecLists
+# paths (/usr/share/seclists/...), so on macOS -- where the lists live
+# elsewhere -- ffuf/gobuster exited non-zero and the phases silently produced
+# zero findings. Resolution must be configurable (SECLISTS_DIR) and find real
+# files, failing safely (not raising) when none are present.
+# --------------------------------------------------------------------------- #
+
+class TestWordlistResolution:
+    def test_resolves_from_seclists_dir(self, tmp_path, monkeypatch):
+        import core.wordlists as w
+        root = tmp_path / "SecLists"
+        (root / "Discovery" / "Web-Content").mkdir(parents=True)
+        (root / "Discovery" / "DNS").mkdir(parents=True)
+        web = root / "Discovery" / "Web-Content" / "common.txt"
+        web.write_text("admin\nlogin\n")
+        dns = root / "Discovery" / "DNS" / "subdomains-top1million-5000.txt"
+        dns.write_text("api\nadmin\n")
+        # SECLISTS_DIR must take priority over any real machine wordlists.
+        monkeypatch.setenv("SECLISTS_DIR", str(root))
+        assert os.path.realpath(w.resolve("web")) == os.path.realpath(str(web))
+        assert os.path.realpath(w.resolve("vhosts")) == os.path.realpath(str(dns))
+
+    def test_missing_wordlist_fails_safe(self, tmp_path, monkeypatch):
+        import core.wordlists as w
+        # Point at an empty dir and disable every other root/legacy path.
+        monkeypatch.setenv("SECLISTS_DIR", str(tmp_path))
+        monkeypatch.setattr(w, "_ROOT_CANDIDATES", [])
+        monkeypatch.setattr(w, "_LEGACY", {})
+        # Must return a (non-existent) default path string instead of raising.
+        result = w.resolve("web")
+        assert isinstance(result, str) and result
+        assert not os.path.isfile(result)
